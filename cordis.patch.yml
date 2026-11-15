@@ -1,0 +1,5 @@
+# Bundle patch for @local/session-tools: inserts the Host row and its Client half.
+- insert:
+    - id: session-tools
+      name: '@local/session-tools'
+      config: {}

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Session Tools",
+    "description": "Configures session storage roots, adds conversation menu actions, filters the model picker by availability / multimodality, lets each model source be collapsed, and shows each provider's remaining quota in its heading."
+  }
+}
