@@ -72,10 +72,38 @@ Host 侧同时注册了工具 `open_folder` / `delete` / `storage_info` / `stora
 
 ## 安装
 
-本插件是本地插件，不发布到 npm（`package.json` 里标了 `private: true`）。
+### 方式一：图形界面安装（推荐）
 
-1. 把整个目录放到 Harness 能加载本地插件的位置（例如 profile 的 `node_modules/` 下，或通过 bundle patch 指向本地路径）。
-2. `cordis.patch.yml` 会向 profile 插入一条 `session-tools` 配置：
+设置 → 插件 → 右上箭头 → **安装第三方插件**，在「包名或地址」框里填 Git 仓库地址：
+
+```
+https://github.com/jinzhouchu/dsh-session-tools.git
+```
+
+点**安装**，等 pnpm 拉完仓库并应用 bundle patch，然后**重启 Harness**。
+
+插件自带 `cordis.patch.yml` 并在 `package.json` 的 `dsh.bundle.patch` 里声明，满足安装器的"组合包 patch"要求，能被正常识别和安装。若拉 GitHub 卡住，安装对话框提供「改用国内镜像」，但镜像只替代 npm 包下载、不替代 GitHub 仓库本身。
+
+> 如果之前已经用下面的 link 方式装过同一个包，**先卸载再装**，否则同一个包名 `@local/session-tools` 会冲突。换机器或全新环境可直接用本方式。
+
+### 方式二：本地 link（开发用）
+
+改源码后即时生效，适合二次开发（本插件不发布到 npm，`package.json` 标了 `private: true`）：
+
+1. 在 profile 的 `package.json` 里加一条依赖：
+
+   ```json
+   "dependencies": {
+     "@local/session-tools": "link:F:/path/to/session-tools-plugin"
+   },
+   "dsh": {
+     "profile": {
+       "bundles": ["@local/session-tools"]
+     }
+   }
+   ```
+
+2. 插件目录里的 `cordis.patch.yml` 会向 profile 插入一条配置：
 
    ```yaml
    - insert:
