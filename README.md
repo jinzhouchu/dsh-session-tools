@@ -56,7 +56,10 @@ Host 侧同时注册了工具 `open_folder` / `delete` / `storage_info` / `stora
 细节：
 
 - 筛选后**零命中的来源连标题一起立即隐藏**，不需要先展开一次。
-- **"可用"的可信度**：`dsh-our-free-model` 的 summary 把未探测的模型（`probedAt === 0`，含 EAC / Kilo / aggregate / combo 及所有渠道模型）无条件标成 `available`，所以标"可用"不等于真能对话。本插件据此把它们降级为 `unverified`，"仅可用"默认隐藏；有真实证据能吐字的模型列在 `client.js` 的 `MF_VERIFIED_LIVE` 白名单里，匹配支持完整 id 与尾缀（如 `spark-x2.6` 可命中 `loomy/spark-x2.6`）。白名单来源有二：① 18899 网关真实对话实测通过的免费池模型；② `channel-pack/token-ledger.json` 里有成功请求历史的渠道模型（讯飞 `spark-x2.6`、qodercn `qfmodel` 等）。只有失败记录的（Kimi-K3、OpenPangu）刻意排除。免费额度与渠道会滚动，需定期对照 ledger 更新该集合。
+- **"可用"的可信度**：`dsh-our-free-model` 的 summary 把未探测的模型（`probedAt === 0`，含 EAC / Kilo / aggregate / combo）无条件标成 `available`，所以标"可用"不等于真能对话。本插件据此把它们降级为 `unverified`，"仅可用"默认隐藏；有真实证据能吐字的模型列在 `client.js` 的 `MF_VERIFIED_LIVE` 白名单里，匹配支持完整 id 与尾缀（如 `spark-x2.6` 可命中 `loomy/spark-x2.6`）。
+  - 白名单有**严格的证据门槛**，只收两类：① 18899 网关真实对话实测通过的免费池模型；② `channel-pack/token-ledger.json` 里**有充分成功记录**（数十次请求）的渠道模型（讯飞 `spark-x2.6` 281req、qodercn `qfmodel` 888req 等）。仅 1 次成功、或只有失败记录的（Kimi-K3、OpenPangu、Qoder `mmodel`/MiniMax-M3 7req/7err）一律不收。
+  - ⚠️ 已修复的坑：一个失败渠道模型（如 Qoder `mmodel`，显示名 MiniMax-M3）会被 `mfLookup` 的模糊名字匹配串到白名单里的 `minimaxai/minimax-m3.1-flash`，从而"借用"对方的 available 通过筛选。证据门槛 + 回归测试已堵住；切勿把名字相似但证据不足的模型加入白名单。
+  - 注意：**额度徽章显示的数字是账户余额，与某个具体模型能否调用是两回事**（Qoder 有 398 积分但 `mmodel` 全失败）。渠道额度与可用模型都会滚动，需定期对照 ledger 更新白名单。
 - 来源标题黑色加粗；额度写在 `data-st-mf-quota` 属性上，用 CSS `::after` 渲染，不污染作为折叠 key 的标题文字。
 - 三种开关状态跨重启保留。
 

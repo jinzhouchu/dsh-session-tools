@@ -752,13 +752,19 @@ window.__ModuleLoader__.load({
       'nvidia/nemotron-3.5-super-vl:free',
       'stealth/glyph-cluster',
       'combo:main-fallback',
-      // channel models — proven by token-ledger success history
+      // channel models — only those with a SUBSTANTIAL success history in
+      // channel-pack/token-ledger.json are admitted. A single successful
+      // request is not enough evidence (quotas/routes rotate daily).
       'qfmodel',              // qodercn, 888 req / 32 err
       'spark-x2.6',           // loomy 讯飞, 281 req / 30 err
-      'sn-sensenova-6-8-flash', // raccoon
-      'qwen3.8-omni-flash',   // lobsterai
-      'MiniMax-M3.1-Flash',   // minimax
-      'deepseek-v4-pro',      // lobsterai
+      'sn-sensenova-6-8-flash', // raccoon, 62 req / 8 err
+      'qwen3.8-omni-flash',   // lobsterai, 30 req / 0 err
+      // Deliberately EXCLUDED (failed or insufficient evidence):
+      //   qoder/mmodel (MiniMax-M3)  7 req / 7 err  — all failed
+      //   codearts/kimi-k3.1-pro     1 req / 1 err
+      //   codearts/openpangu-*       1 req / 1 err
+      //   minimax/MiniMax-M3.1-Flash 1 req / 0 err  — too few samples
+      //   lobsterai/deepseek-v4-pro  1 req / 0 err  — too few samples
     ])
     // Fast membership check against a normalized full id or any of its tail
     // segments, so channel-prefixed catalog ids still match a bare allowlist id.

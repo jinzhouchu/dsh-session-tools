@@ -943,6 +943,65 @@ check('channel models with a real success history survive the available filter',
   assert.equal(I.mfShouldShow(kimi, { available: true }), false)
 })
 
+check('failed models stay unavailable even when a name looks allowlisted', () => {
+  // Qoder's MiniMax-M3 is id `mmodel` with a 7-req/7-err (all failed) history.
+  // It must never be admitted — neither by exact id nor by any tail/normalized
+  // match against the allowed MiniMax-family-free entries.
+  const idx = I.mfBuildIndex([
+    { id: 'qoder/mmodel', name: 'MiniMax-M3 · x0.2', availability: 'available', probedAt: 0 },
+    { id: 'mmodel', name: 'MiniMax-M3', availability: 'available', probedAt: 0 },
+    { id: 'minimax/MiniMax-M3.1-Flash', name: 'MiniMax M3.1 Flash', availability: 'available', probedAt: 0 },
+    { id: 'loomy/spark-x2.6', name: 'Spark X2.6', availability: 'available', probedAt: 0 },
+  ])
+  const qoder = idx.byId.get(I.mfNormalize('qoder/mmodel'))
+  const bare = idx.byId.get(I.mfNormalize('mmodel'))
+  const flash = idx.byId.get(I.mfNormalize('minimax/MiniMax-M3.1-Flash'))
+  const spark = idx.byId.get(I.mfNormalize('loomy/spark-x2.6'))
+  assert.equal(qoder.availability, 'unverified')
+  assert.equal(bare.availability, 'unverified')
+  assert.equal(flash.availability, 'unverified') // only 1 request — insufficient
+  assert.equal(spark.availability, 'available')  // 281 req / 30 err — proven
+  assert.equal(I.mfShouldShow(qoder, { available: true }), false)
+  assert.equal(I.mfShouldShow(qoder, { available: true, showUnknown: true }), true)
+})
+
+// ---- regression: a failed model must not borrow availability from a
+// similarly-named allowlisted model via fuzzy name matching ----
+check('lookup does not upgrade an exact-id unverified model via a similar name', () => {
+  const idx = I.mfBuildIndex([
+    { id: 'qoder/mmodel', name: 'MiniMax-M3', availability: 'available', probedAt: 0 }, // failed (7/7), unverified
+    { id: 'baidu/ernie-5.5-flash-preview:free', name: 'Ernie', availability: 'available', probedAt: 0 },
+  ])
+  const option = new El('button')
+  option.setAttribute('title', 'MiniMax-M3 · x0.2')
+  const span = new El('span')
+  // data-model-id is the authoritative identity; if it resolves to a row,
+  // that row's verdict must win over any fuzzy name collision.
+  span.setAttribute('data-model-id', 'qoder/mmodel')
+  option.appendChild(span)
+  const meta = I.mfLookup(idx, option)
+  assert.ok(meta, 'expected a match')
+  assert.equal(meta.availability, 'unverified')
+  assert.equal(I.mfShouldShow(meta, { available: true }), false)
+})
+
+check('Qoder MiniMax-M3 stays hidden when a similar MiniMax id is throttled', () => {
+  // Exact reproduction of the 2026-11-25 bug: the Qoder dropdown option
+  // "MiniMax-M3 · x0.2" (channel id `mmodel`, 7 req / 7 err) was fuzzy-matched
+  // to `minimaxai/minimax-m3.1-flash`. If that row is ever treated as available
+  // (e.g. mistakenly allowlisted), the failed model gets admitted too. With
+  // the correct verdict it must stay hidden under "available only".
+  const idx = I.mfBuildIndex([
+    { id: 'minimaxai/minimax-m3.1-flash', name: 'minimaxai/minimax-m3.1-flash', availability: 'throttled', probedAt: 1 },
+  ])
+  const option = new El('button')
+  option.setAttribute('title', 'MiniMax-M3 · x0.2')
+  const meta = I.mfLookup(idx, option)
+  assert.ok(meta, 'the similar name should still match')
+  assert.equal(meta.availability, 'throttled')
+  assert.equal(I.mfShouldShow(meta, { available: true }), false)
+})
+
 check('teardown disconnects every observer and document listener', () => {
   cleanup()
   for (const o of MO.all) assert.equal(o.observing.length, 0)
