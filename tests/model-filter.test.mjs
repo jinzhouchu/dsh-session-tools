@@ -1047,6 +1047,34 @@ check('verified channel row with no probe verdict is promoted, failed names are 
   assert.equal(I.mfShouldShow(x25, { available: true }), false)
 })
 
+check('qfmodel evidence is provider-scoped: Qoder intl cannot borrow Qoder CN success', () => {
+  // Same id `qfmodel` ("Qwen3.8-Flash · 免费") exists in two products.
+  // qodercn: 888 req / 32 err success; qoder intl: 5 req / 5 err on 11-25
+  // (112/model_error). Evidence must be keyed by the source group.
+  const idx = I.mfBuildIndex([])
+  const option = new El('button')
+  option.setAttribute('title', 'Qwen3.8-Flash · 免费')
+  const span = new El('span')
+  span.setAttribute('data-model-id', 'qfmodel')
+  option.appendChild(span)
+
+  const cn = I.mfLookup(idx, option, 'qodercn')
+  assert.ok(cn, 'Qoder CN should resolve to the evidence-backed row')
+  assert.equal(cn.providers.join('|'), 'qodercn') // vm realm arrays: compare by value
+  assert.equal(cn.availability, 'available')
+  assert.equal(I.mfShouldShow(cn, { available: true }), true)
+
+  const intl = I.mfLookup(idx, option, 'qoder')
+  assert.equal(intl, null, 'Qoder intl must not inherit the CN verdict')
+  assert.equal(I.mfShouldShow(intl, { available: true }), false)
+
+  // The visible label alone must be enough to resolve the CN row.
+  const labelOnly = new El('button')
+  labelOnly.setAttribute('title', 'Qwen3.8-Flash · 免费')
+  assert.equal(I.mfLookup(idx, labelOnly, 'qodercn')?.id, 'qfmodel')
+  assert.equal(I.mfLookup(idx, labelOnly, 'qoder'), null)
+})
+
 check('teardown disconnects every observer and document listener', () => {
   cleanup()
   for (const o of MO.all) assert.equal(o.observing.length, 0)

@@ -765,21 +765,29 @@ window.__ModuleLoader__.load({
         id: 'spark-x2.6',           // loomy 讯飞, 281 req / 30 err
         name: 'Spark X2.6',
         aliases: ['Spark X2.6', 'Spark X2.6 · x0.1', 'Spark X2.6 (x0.1)', '讯飞 Spark X2.6', 'Loomy (讯飞) Spark X2.6'],
+        providers: ['loomy'],
       },
       {
-        id: 'qfmodel',              // qodercn, 888 req / 32 err
-        name: 'QFModel',
-        aliases: ['QFModel', 'qfmodel', 'Qoder qfmodel'],
+        // ⚠️ qfmodel is shared by TWO products. Only qodercn's account has a
+        // long success trail (888 req / 32 err on 11-12/13). Qoder intl's same
+        // id failed 5/5 on 2026-11-25 (112/model_error, pricingUrl gate), so
+        // it must NOT inherit qodercn's evidence. Provider-scoped below.
+        id: 'qfmodel',
+        name: 'Qwen3.8-Flash',
+        aliases: ['Qwen3.8-Flash', 'Qwen3.8-Flash · 免费', 'QFModel', 'qfmodel', 'Qoder 中国版 qfmodel'],
+        providers: ['qodercn'],
       },
       {
         id: 'sn-sensenova-6-8-flash', // raccoon, 62 req / 8 err
         name: 'SenseNova 6-8 Flash',
         aliases: ['SenseNova 6-8 Flash', 'sn-sensenova-6-8-flash'],
+        providers: ['raccoon'],
       },
       {
         id: 'qwen3.8-omni-flash',   // lobsterai, 30 req / 0 err
         name: 'Qwen3.8 Omni Flash',
         aliases: ['Qwen3.8 Omni Flash', 'qwen3.8-omni-flash'],
+        providers: ['lobsterai'],
       },
       // Deliberately EXCLUDED (failed or insufficient evidence):
       //   qoder/mmodel (MiniMax-M3)  7 req / 7 err  — all failed
@@ -886,6 +894,7 @@ window.__ModuleLoader__.load({
           name: String(row.name ?? row.id),
           availability: 'available',
           vision: row.vision === true,
+          providers: Array.isArray(row.providers) && row.providers.length ? row.providers : null,
         }
         // Keep `size` as the summary catalog's metadata count; seeded evidence
         // rows are lookup-only so the "元数据 N 条" stat stays honest.
@@ -928,27 +937,44 @@ window.__ModuleLoader__.load({
     }
 
     /** Resolve a picker option: data-model-id → exact label → fuzzy label → tokens. */
-    function mfLookup(index, option) {
+    function mfLookup(index, option, providerId) {
       if (!index || !option) return null
+      // Evidence can be product-specific: `qfmodel` has 888 successful calls
+      // on Qoder CN but 5/5 failures on Qoder intl. One product's success must
+      // never be borrowed by a different group that happens to use the same id.
+      const accept = (meta) => {
+        if (!meta) return false
+        const owners = meta.providers
+        if (!Array.isArray(owners) || owners.length === 0) return true
+        if (!providerId) return true // caller without group context keeps legacy behaviour
+        return owners.includes(providerId)
+      }
       const idNode = typeof option.querySelector === 'function' ? option.querySelector('[data-model-id]') : null
       const rawId = String(idNode?.getAttribute?.('data-model-id') ?? '')
       for (const key of mfIdKeys(rawId)) {
-        if (index.byId.has(key)) return index.byId.get(key)
+        if (index.byId.has(key)) {
+          const hit = index.byId.get(key)
+          if (accept(hit)) return hit
+        }
       }
       const flatId = mfNormalize(rawId)
       if (flatId) {
         for (const [key, meta] of index.byId) {
-          if (key.length >= 5 && (flatId.includes(key) || key.includes(flatId))) return meta
+          if (key.length >= 5 && (flatId.includes(key) || key.includes(flatId)) && accept(meta)) return meta
         }
       }
       const rawLabel = String(option.getAttribute?.('title') || option.textContent || '')
       const label = mfNormalize(rawLabel)
       if (!label) return null
-      if (index.byName.has(label)) return index.byName.get(label)
-      for (const [key, meta] of index.names) {
-        if (key.length >= 4 && (label.includes(key) || key.includes(label))) return meta
+      if (index.byName.has(label)) {
+        const hit = index.byName.get(label)
+        if (accept(hit)) return hit
       }
-      return mfTokenMatch(index, rawLabel)
+      for (const [key, meta] of index.names) {
+        if (key.length >= 4 && (label.includes(key) || key.includes(label)) && accept(meta)) return meta
+      }
+      const tokenHit = mfTokenMatch(index, rawLabel)
+      return accept(tokenHit) ? tokenHit : null
     }
 
     /**
@@ -1699,6 +1725,7 @@ window.__ModuleLoader__.load({
               key: prepared.key,
               heading,
               button: prepared.button,
+              provider: heading ? mfProviderOf(foldKey(heading)) : null,
               collapsed: prepared.key ? folds.has(prepared.key) : false,
             }
             groups.set(section, info)
@@ -1717,9 +1744,9 @@ window.__ModuleLoader__.load({
         }
 
         for (const option of options) {
-          const meta = mfLookup(index, option)
-          if (!meta) unknown += 1
           const info = groupInfo(mfGroupOf(option, list))
+          const meta = mfLookup(index, option, info.provider)
+          if (!meta) unknown += 1
           const passes = mfShouldShow(meta, state)
           const visible = passes && !info.collapsed
           // React owns className, not inline display; clearing it restores the
