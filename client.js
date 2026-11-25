@@ -742,30 +742,54 @@ window.__ModuleLoader__.load({
     // `spark-x2.6`, `loomy/spark-x2.6`, `loomy:spark-x2.6` all hit). Models with
     // only failures in the ledger (Kimi-K3, OpenPangu) are deliberately absent.
     // Re-check the ledger when quotas rotate or channels change.
-    const MF_VERIFIED_LIVE = new Set([
-      // free pool — real chat round-trip
-      'recursive/flint-v1.0:free',
-      'nvidia/nemotron-3-ultra-550b-a55b:free',
-      'baidu/ernie-5.5-flash-preview:free',
-      'liquid/lfm-3-1.7b:free',
-      'nvidia/nemotron-3.5-lightning:free',
-      'nvidia/nemotron-3.5-super-vl:free',
-      'stealth/glyph-cluster',
-      'combo:main-fallback',
+    // IMPORTANT: `/summary` only publishes the free lane + Kilo (~48 rows).
+    // Channel-pack groups in the picker (Loomy/讯飞, Qoder, Raccoon, LobsterAI,
+    // ...) are NOT in that catalog, so a bare allowlist could never match them:
+    // `mfLookup` returned null and "available only" hid the whole group.
+    // Every verified channel row therefore carries the aliases the picker
+    // actually renders and is seeded into the index by `mfBuildIndex`.
+    const MF_VERIFIED_ROWS = [
+      // free pool — real chat round-trip via the 18899 gateway
+      { id: 'recursive/flint-v1.0:free' },
+      { id: 'nvidia/nemotron-3-ultra-550b-a55b:free' },
+      { id: 'baidu/ernie-5.5-flash-preview:free' },
+      { id: 'liquid/lfm-3-1.7b:free' },
+      { id: 'nvidia/nemotron-3.5-lightning:free' },
+      { id: 'nvidia/nemotron-3.5-super-vl:free' },
+      { id: 'stealth/glyph-cluster' },
+      { id: 'combo:main-fallback' },
       // channel models — only those with a SUBSTANTIAL success history in
-      // channel-pack/token-ledger.json are admitted. A single successful
-      // request is not enough evidence (quotas/routes rotate daily).
-      'qfmodel',              // qodercn, 888 req / 32 err
-      'spark-x2.6',           // loomy 讯飞, 281 req / 30 err
-      'sn-sensenova-6-8-flash', // raccoon, 62 req / 8 err
-      'qwen3.8-omni-flash',   // lobsterai, 30 req / 0 err
+      // channel-pack/token-ledger.json (2026-11-12/13/15) are admitted. One
+      // lucky request is not enough: quotas and routes rotate daily.
+      {
+        id: 'spark-x2.6',           // loomy 讯飞, 281 req / 30 err
+        name: 'Spark X2.6',
+        aliases: ['Spark X2.6', 'Spark X2.6 · x0.1', 'Spark X2.6 (x0.1)', '讯飞 Spark X2.6', 'Loomy (讯飞) Spark X2.6'],
+      },
+      {
+        id: 'qfmodel',              // qodercn, 888 req / 32 err
+        name: 'QFModel',
+        aliases: ['QFModel', 'qfmodel', 'Qoder qfmodel'],
+      },
+      {
+        id: 'sn-sensenova-6-8-flash', // raccoon, 62 req / 8 err
+        name: 'SenseNova 6-8 Flash',
+        aliases: ['SenseNova 6-8 Flash', 'sn-sensenova-6-8-flash'],
+      },
+      {
+        id: 'qwen3.8-omni-flash',   // lobsterai, 30 req / 0 err
+        name: 'Qwen3.8 Omni Flash',
+        aliases: ['Qwen3.8 Omni Flash', 'qwen3.8-omni-flash'],
+      },
       // Deliberately EXCLUDED (failed or insufficient evidence):
       //   qoder/mmodel (MiniMax-M3)  7 req / 7 err  — all failed
       //   codearts/kimi-k3.1-pro     1 req / 1 err
       //   codearts/openpangu-*       1 req / 1 err
       //   minimax/MiniMax-M3.1-Flash 1 req / 0 err  — too few samples
       //   lobsterai/deepseek-v4-pro  1 req / 0 err  — too few samples
-    ])
+      //   spark-x (fallback X2.5)    no ledger success — do not admit
+    ]
+    const MF_VERIFIED_LIVE = new Set(MF_VERIFIED_ROWS.map(row => row.id))
     // Fast membership check against a normalized full id or any of its tail
     // segments, so channel-prefixed catalog ids still match a bare allowlist id.
     const mfIsLiveVerified = (id) => {
@@ -820,13 +844,18 @@ window.__ModuleLoader__.load({
         // dsh-our-free-model labels every EAC / Kilo / aggregate / combo row
         // `available` without ever pinging it (probedAt === 0), so "available"
         // alone does not mean the model can actually answer. Demote those rows
-        // to `unverified`; only a real probe verdict or the live-verified list
-        // below counts as available. "Show unknown" still brings them back.
+        // to `unverified`; only a real probe verdict or the evidence-backed
+        // list below counts as available. "Show unknown" still brings them back.
         const probedAt = Number(entry.probedAt ?? 0)
-        const unverified = rawAvailability === 'available' && !(probedAt > 0)
-        const availability = rawAvailability === 'available'
-          ? (unverified && !mfIsLiveVerified(id) ? 'unverified' : 'available')
-          : rawAvailability
+        const verified = mfIsLiveVerified(id)
+        let availability = rawAvailability
+        if (verified && (rawAvailability === 'available' || rawAvailability === 'unknown')) {
+          // Ledger/gateway evidence outranks "no verdict", but not an explicit
+          // throttled / region-blocked / unavailable probe result.
+          availability = 'available'
+        } else if (rawAvailability === 'available' && !(probedAt > 0) && !verified) {
+          availability = 'unverified'
+        }
         const meta = {
           id,
           name: String(entry.name ?? '').trim(),
@@ -844,6 +873,32 @@ window.__ModuleLoader__.load({
         for (const token of new Set([...mfTokens(meta.id), ...mfTokens(meta.name)])) {
           if (!tokenRows.has(token)) tokenRows.set(token, [])
           tokenRows.get(token).push(meta)
+        }
+      }
+      // The picker's channel-pack groups are absent from /summary. Seed only
+      // evidence-backed rows so they can still be resolved by data-model-id
+      // (`loomy:spark-x2.6`) or by the label React renders ("Spark X2.6 · x0.1").
+      // Unproven channel rows stay unknown and hidden under "available only".
+      for (const row of MF_VERIFIED_ROWS) {
+        if (mfIdKeys(row.id).some(key => byId.has(key))) continue
+        const meta = {
+          id: row.id,
+          name: String(row.name ?? row.id),
+          availability: 'available',
+          vision: row.vision === true,
+        }
+        // Keep `size` as the summary catalog's metadata count; seeded evidence
+        // rows are lookup-only so the "元数据 N 条" stat stays honest.
+        for (const key of mfIdKeys(meta.id)) put(byId, key, meta)
+        const labels = [meta.name, ...(Array.isArray(row.aliases) ? row.aliases : [])]
+        for (const alias of labels) {
+          const keyName = mfNormalize(alias)
+          if (!keyName) continue
+          put(byName, keyName, meta)
+          names.push([keyName, meta])
+          // Deliberately do NOT add aliases to tokenRows: a label like
+          // "Spark X2.5 · x0.1" shares `spark`/`x0.1` tokens with the verified
+          // X2.6 row and must not be rescued by the fuzzy token fallback.
         }
       }
       // Longest first: fuzzy label matching should prefer the most specific row.

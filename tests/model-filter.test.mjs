@@ -346,7 +346,10 @@ check('vision accepts boolean vision and inputModalities', () => {
 })
 check('buildIndex tolerates junk and de-duplicates ids', () => {
   const idx = I.mfBuildIndex([null, 3, CATALOG[0], { ...CATALOG[0] }, { id: '', name: '' }])
-  assert.equal(idx.byId.size, 1)
+  // Evidence-seeded channel rows are lookup-only and must not be counted as
+  // catalog metadata, but they do occupy byId keys.
+  const seededKeys = I.mfBuildIndex([]).byId.size
+  assert.equal(idx.byId.size, seededKeys + 1)
   assert.equal(idx.size, 2) // blank rows are dropped, duplicate ids are de-duplicated
   assert.equal(idx.byName.get(I.mfNormalize('Kilo Auto Free')).availability, 'available')
   assert.ok(idx.names[0][0].length >= idx.names[idx.names.length - 1][0].length)
@@ -1000,6 +1003,48 @@ check('Qoder MiniMax-M3 stays hidden when a similar MiniMax id is throttled', ()
   assert.ok(meta, 'the similar name should still match')
   assert.equal(meta.availability, 'throttled')
   assert.equal(I.mfShouldShow(meta, { available: true }), false)
+})
+
+check('讯飞 survives even when channel-pack rows are absent from /summary', () => {
+  // Reproduction of the 2026-11-25 report: summary publishes only the free
+  // lane + Kilo (~48 rows), so `mfLookup` never saw Loomy's `spark-x2.6` and
+  // "available only" hid the whole 讯飞 group. Evidence-backed channel rows
+  // must be seeded into the index with the labels the picker actually renders.
+  const idx = I.mfBuildIndex([
+    { id: 'kilo-auto/free', name: 'Kilo Auto Free', availability: 'available', probedAt: 1 },
+  ])
+  const option = new El('button')
+  option.setAttribute('title', 'Spark X2.6 · x0.1')
+  const span = new El('span')
+  span.setAttribute('data-model-id', 'loomy:spark-x2.6')
+  option.appendChild(span)
+  const byId = I.mfLookup(idx, option)
+  assert.ok(byId, 'loomy:spark-x2.6 must resolve even without a summary row')
+  assert.equal(byId.id, 'spark-x2.6')
+  assert.equal(byId.availability, 'available')
+  assert.equal(I.mfShouldShow(byId, { available: true }), true)
+
+  const byLabel = new El('button')
+  byLabel.setAttribute('title', 'Spark X2.6 · x0.1')
+  assert.equal(I.mfLookup(idx, byLabel)?.id, 'spark-x2.6')
+
+  // A similar label without evidence (fallback X2.5) must stay unknown.
+  const fallback = new El('button')
+  fallback.setAttribute('title', 'Spark X2.5 · x0.1')
+  assert.equal(I.mfLookup(idx, fallback), null)
+})
+
+check('verified channel row with no probe verdict is promoted, failed names are not', () => {
+  const idx = I.mfBuildIndex([
+    { id: 'loomy/spark-x2.6', name: 'Spark X2.6', availability: 'unknown', probedAt: 0 },
+    { id: 'loomy/spark-x', name: 'Spark X2.5 · x0.1', availability: 'available', probedAt: 0 },
+  ])
+  const spark = idx.byId.get(I.mfNormalize('loomy/spark-x2.6'))
+  const x25 = idx.byId.get(I.mfNormalize('loomy/spark-x'))
+  assert.equal(spark.availability, 'available') // ledger 281 req / 30 err
+  assert.equal(x25.availability, 'unverified')  // no ledger evidence
+  assert.equal(I.mfShouldShow(spark, { available: true }), true)
+  assert.equal(I.mfShouldShow(x25, { available: true }), false)
 })
 
 check('teardown disconnects every observer and document listener', () => {
