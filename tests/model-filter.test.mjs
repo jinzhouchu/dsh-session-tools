@@ -217,8 +217,8 @@ function addGroup(list, name, models) {
 }
 
 const CATALOG = [
-  { id: 'kilo-auto/free', name: 'Kilo Auto Free', availability: 'available', vision: false },
-  { id: 'nvidia/nemotron-3.5-super-vl:free', name: 'Kilo Nemotron 3.5 Super VL', availability: 'available', vision: true },
+  { id: 'kilo-auto/free', name: 'Kilo Auto Free', availability: 'available', probedAt: 1, vision: false },
+  { id: 'nvidia/nemotron-3.5-super-vl:free', name: 'Kilo Nemotron 3.5 Super VL', availability: 'available', probedAt: 1, vision: true },
   { id: 'mimo-v2.6-flash-free', name: 'MiMo V2.6 Flash', availability: 'throttled', vision: true },
   { id: 'glm-5.3-flash-free', name: 'GLM 5.3 Flash', availability: 'region-blocked', vision: false },
   { id: 'deepseek-chat', name: 'DeepSeek Chat', availability: 'unknown', vision: false },
@@ -888,6 +888,27 @@ await checkAsync('closing the picker detaches the bar', async () => {
   bodyObs.trigger()
   await tick()
   assert.equal(bar.isConnected, false)
+})
+
+check('unprobed channel rows labelled available are demoted to unverified', () => {
+  const idx = I.mfBuildIndex([
+    { id: 'moonshotai/kimi-k3.1-pro', name: 'Kimi-K3', availability: 'available', probedAt: 0 },
+    { id: 'openpangu-2.0-pro', name: 'OpenPangu-2.0-Pro', availability: 'available', probedAt: 0 },
+    { id: 'codearts-agent/x', name: 'Probed Model', availability: 'available', probedAt: 1 },
+    { id: 'baidu/ernie-5.5-flash-preview:free', name: 'Ernie', availability: 'available', probedAt: 0 },
+  ])
+  const kimi = idx.byId.get(I.mfNormalize('moonshotai/kimi-k3.1-pro'))
+  const pangu = idx.byId.get(I.mfNormalize('openpangu-2.0-pro'))
+  const probed = idx.byId.get(I.mfNormalize('codearts-agent/x'))
+  const ernie = idx.byId.get(I.mfNormalize('baidu/ernie-5.5-flash-preview:free'))
+  assert.equal(kimi.availability, 'unverified')
+  assert.equal(pangu.availability, 'unverified')
+  assert.equal(probed.availability, 'available')
+  // live-verified allowlist keeps the truly working unprobed row available
+  assert.equal(ernie.availability, 'available')
+  assert.equal(I.mfShouldShow(kimi, { available: true }), false)
+  assert.equal(I.mfShouldShow(kimi, { available: true, showUnknown: true }), true)
+  assert.equal(I.mfShouldShow(ernie, { available: true }), true)
 })
 
 check('teardown disconnects every observer and document listener', () => {

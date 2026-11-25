@@ -182,7 +182,7 @@ window.__ModuleLoader__.load({
         'filter.button': '筛选',
         'filter.title': '按可用性与多模态筛选模型',
         'filter.available': '仅可用',
-        'filter.availableHint': '只显示探测结果为「可用」的模型；无状态信息的模型会一并隐藏，可勾选「显示未知」放回',
+        'filter.availableHint': '只显示经探测确认可用、或列入实测白名单的模型；渠道里那些未探测就被标「可用」的会被当成未知隐藏，勾选「显示未知」可放回',
         'filter.multimodal': '仅多模态',
         'filter.multimodalHint': '只显示支持图像输入的模型；无状态信息的模型会一并隐藏',
         'filter.showUnknown': '显示未知',
@@ -270,7 +270,7 @@ window.__ModuleLoader__.load({
         'filter.button': 'Filter',
         'filter.title': 'Filter models by availability and multimodality',
         'filter.available': 'Available only',
-        'filter.availableHint': 'Show only models the probe marked available; models with no status are hidden too, use "Show unknown" to bring them back',
+        'filter.availableHint': 'Show only probe-verified or live-verified models; channel rows marked available without a probe are treated as unknown, use "Show unknown" to bring them back',
         'filter.multimodal': 'Multimodal only',
         'filter.multimodalHint': 'Show only models accepting image input; models with no status are hidden',
         'filter.showUnknown': 'Show unknown',
@@ -727,6 +727,21 @@ window.__ModuleLoader__.load({
     // `availability` and `vision` for every model it publishes.
     const MF_KEY = 'session-tools.modelFilter.v1'
     const MF_TTL = 60_000
+    // Models verified by a real chat round-trip on 2026-11-25 (see the host's
+    // probe script). These are mostly channel/combo rows that the upstream
+    // summary marks `available` without probing (probedAt === 0); keeping them
+    // here lets "available only" stay honest without hiding genuinely working
+    // models. Re-run the probe and update this set when free quotas rotate.
+    const MF_VERIFIED_LIVE = new Set([
+      'recursive/flint-v1.0:free',
+      'nvidia/nemotron-3-ultra-550b-a55b:free',
+      'baidu/ernie-5.5-flash-preview:free',
+      'liquid/lfm-3-1.7b:free',
+      'nvidia/nemotron-3.5-lightning:free',
+      'nvidia/nemotron-3.5-super-vl:free',
+      'stealth/glyph-cluster',
+      'combo:main-fallback',
+    ])
     const MF_FUNNEL = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3.4h12L9.5 8.8v3.5L6.5 14V8.8z"/></svg>'
 
     function mfNormalize(value) {
@@ -768,10 +783,22 @@ window.__ModuleLoader__.load({
       const put = (map, key, meta) => { if (key && !map.has(key)) map.set(key, meta) }
       for (const entry of Array.isArray(catalog) ? catalog : []) {
         if (!entry || typeof entry !== 'object') continue
+        const id = String(entry.id ?? '').trim()
+        const rawAvailability = String(entry.availability ?? 'unknown')
+        // dsh-our-free-model labels every EAC / Kilo / aggregate / combo row
+        // `available` without ever pinging it (probedAt === 0), so "available"
+        // alone does not mean the model can actually answer. Demote those rows
+        // to `unverified`; only a real probe verdict or the live-verified list
+        // below counts as available. "Show unknown" still brings them back.
+        const probedAt = Number(entry.probedAt ?? 0)
+        const unverified = rawAvailability === 'available' && !(probedAt > 0)
+        const availability = rawAvailability === 'available'
+          ? (unverified && !MF_VERIFIED_LIVE.has(id) ? 'unverified' : 'available')
+          : rawAvailability
         const meta = {
-          id: String(entry.id ?? '').trim(),
+          id,
           name: String(entry.name ?? '').trim(),
-          availability: String(entry.availability ?? 'unknown'),
+          availability,
           vision: mfIsVision(entry),
         }
         if (!meta.id && !meta.name) continue
@@ -845,7 +872,13 @@ window.__ModuleLoader__.load({
     function mfShouldShow(meta, filters) {
       const active = filters.available === true || filters.multimodal === true
       if (!meta) return !active || filters.showUnknown === true
-      if (filters.available && meta.availability !== 'available') return false
+      if (filters.available && meta.availability !== 'available') {
+        // Unprobed channel rows are labelled `available` by the upstream but
+        // were never verified; treat them like `unknown` so "available only"
+        // really means "proven to answer". They come back with "show unknown".
+        if (filters.showUnknown === true && meta.availability === 'unverified') return true
+        return false
+      }
       if (filters.multimodal && !meta.vision) return false
       return true
     }

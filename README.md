@@ -46,7 +46,7 @@ Host 侧同时注册了工具 `open_folder` / `delete` / `storage_info` / `stora
 
 | 功能 | 说明 |
 |---|---|
-| **仅可用** | 只显示 `availability === 'available'` 的模型；无状态信息的默认隐藏，可用「显示未知」放回 |
+| **仅可用** | 只显示**探测确认可用**或列入实测白名单的模型；上游把未探测的渠道模型（EAC/Kilo/aggregate/combo，`probedAt === 0`）直接标成 `available`，这些会被当成「未验证」隐藏，可用「显示未知」放回 |
 | **仅多模态** | 只显示支持图像输入（`vision === true`）的模型 |
 | **显示未知** | 把没有状态元数据的模型重新显示出来，不参与上述两个判定 |
 | **来源折叠** | 每个来源标题前加 `▾/▸` 按钮，点标题也能折叠/展开；状态按来源名存 localStorage |
@@ -56,6 +56,7 @@ Host 侧同时注册了工具 `open_folder` / `delete` / `storage_info` / `stora
 细节：
 
 - 筛选后**零命中的来源连标题一起立即隐藏**，不需要先展开一次。
+- **"可用"的可信度**：`dsh-our-free-model` 的 summary 把 EAC / Kilo / aggregate / combo 这四类渠道模型无条件标成 `available`（`probedAt === 0`，从未探测），所以标"可用"不等于真能对话。本插件据此把它们降级为 `unverified`，"仅可用"默认隐藏；实测确认能吐字的模型列在 `client.js` 的 `MF_VERIFIED_LIVE` 白名单里（免费额度会滚动，需定期重跑探测更新该集合）。
 - 来源标题黑色加粗；额度写在 `data-st-mf-quota` 属性上，用 CSS `::after` 渲染，不污染作为折叠 key 的标题文字。
 - 三种开关状态跨重启保留。
 
@@ -138,7 +139,7 @@ https://github.com/jinzhouchu/dsh-session-tools.git
 │   ├── zh.json         中文文案
 │   └── en.json         英文文案
 └── tests/              Node 回归测试，零第三方依赖
-    ├── model-filter.test.mjs   模型筛选/折叠/额度集成测试（79 例）
+    ├── model-filter.test.mjs   模型筛选/折叠/额度集成测试（80 例）
     ├── client.test.mjs         Client 错误映射与字典校验（17 例）
     └── storage.test.mjs        Host 存储写入与迁移（29 例）
 ```
