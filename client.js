@@ -727,12 +727,23 @@ window.__ModuleLoader__.load({
     // `availability` and `vision` for every model it publishes.
     const MF_KEY = 'session-tools.modelFilter.v1'
     const MF_TTL = 60_000
-    // Models verified by a real chat round-trip on 2026-11-25 (see the host's
-    // probe script). These are mostly channel/combo rows that the upstream
-    // summary marks `available` without probing (probedAt === 0); keeping them
-    // here lets "available only" stay honest without hiding genuinely working
-    // models. Re-run the probe and update this set when free quotas rotate.
+    // Models proven to actually answer, kept as a live-verified allowlist so
+    // "available only" stays honest for rows the upstream summary labels
+    // `available` without probing (probedAt === 0).
+    //
+    // Two sources, both evidence-based (2026-11-25):
+    //  1. Free-pool ids that answered a real chat round-trip via the 18899
+    //     gateway (see output/probe-all-models.mjs).
+    //  2. Channel ids with a successful request history in channel-pack's
+    //     token-ledger.json — e.g. Loomy/讯飞 spark-x2.6 (281 req / 30 err over
+    //     3 days), qodercn qfmodel (888 req). These are NOT probed by the host,
+    //     so without this list they were wrongly demoted and hidden.
+    // Ids here match either the full catalog id or its tail segment (so
+    // `spark-x2.6`, `loomy/spark-x2.6`, `loomy:spark-x2.6` all hit). Models with
+    // only failures in the ledger (Kimi-K3, OpenPangu) are deliberately absent.
+    // Re-check the ledger when quotas rotate or channels change.
     const MF_VERIFIED_LIVE = new Set([
+      // free pool — real chat round-trip
       'recursive/flint-v1.0:free',
       'nvidia/nemotron-3-ultra-550b-a55b:free',
       'baidu/ernie-5.5-flash-preview:free',
@@ -741,7 +752,22 @@ window.__ModuleLoader__.load({
       'nvidia/nemotron-3.5-super-vl:free',
       'stealth/glyph-cluster',
       'combo:main-fallback',
+      // channel models — proven by token-ledger success history
+      'qfmodel',              // qodercn, 888 req / 32 err
+      'spark-x2.6',           // loomy 讯飞, 281 req / 30 err
+      'sn-sensenova-6-8-flash', // raccoon
+      'qwen3.8-omni-flash',   // lobsterai
+      'MiniMax-M3.1-Flash',   // minimax
+      'deepseek-v4-pro',      // lobsterai
     ])
+    // Fast membership check against a normalized full id or any of its tail
+    // segments, so channel-prefixed catalog ids still match a bare allowlist id.
+    const mfIsLiveVerified = (id) => {
+      for (const key of mfIdKeys(id)) if (MF_VERIFIED_LIVE.has(key)) return true
+      const flat = mfNormalize(id)
+      for (const verified of MF_VERIFIED_LIVE) if (flat.endsWith(mfNormalize(verified))) return true
+      return false
+    }
     const MF_FUNNEL = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3.4h12L9.5 8.8v3.5L6.5 14V8.8z"/></svg>'
 
     function mfNormalize(value) {
@@ -793,7 +819,7 @@ window.__ModuleLoader__.load({
         const probedAt = Number(entry.probedAt ?? 0)
         const unverified = rawAvailability === 'available' && !(probedAt > 0)
         const availability = rawAvailability === 'available'
-          ? (unverified && !MF_VERIFIED_LIVE.has(id) ? 'unverified' : 'available')
+          ? (unverified && !mfIsLiveVerified(id) ? 'unverified' : 'available')
           : rawAvailability
         const meta = {
           id,

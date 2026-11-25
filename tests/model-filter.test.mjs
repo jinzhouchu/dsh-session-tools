@@ -911,6 +911,38 @@ check('unprobed channel rows labelled available are demoted to unverified', () =
   assert.equal(I.mfShouldShow(ernie, { available: true }), true)
 })
 
+check('channel models with a real success history survive the available filter', () => {
+  // Loomy/讯飞 spark-x2.6, qodercn qfmodel etc. are unprobed channel rows that
+  // the host labels `available` with probedAt=0. They are proven working via
+  // channel-pack token-ledger, so the allowlist must keep them visible even
+  // when the catalog id carries a channel prefix.
+  const idx = I.mfBuildIndex([
+    { id: 'loomy/spark-x2.6', name: 'Spark X2.6', availability: 'available', probedAt: 0 },
+    { id: 'spark-x2.6', name: 'Spark X2.6 (bare)', availability: 'available', probedAt: 0 },
+    { id: 'loomy:spark-x2.6', name: 'Spark X2.6 (colon)', availability: 'available', probedAt: 0 },
+    { id: 'qodercn/qfmodel', name: 'QFModel', availability: 'available', probedAt: 0 },
+    { id: 'codearts/kimi-k3.1-pro', name: 'Kimi-K3', availability: 'available', probedAt: 0 },
+    { id: 'codearts/openpangu-2.0-pro', name: 'OpenPangu', availability: 'available', probedAt: 0 },
+  ])
+  const sparkSlash = idx.byId.get(I.mfNormalize('loomy/spark-x2.6'))
+  const sparkBare = idx.byId.get(I.mfNormalize('spark-x2.6'))
+  const sparkColon = idx.byId.get(I.mfNormalize('loomy:spark-x2.6'))
+  const qf = idx.byId.get(I.mfNormalize('qodercn/qfmodel'))
+  const kimi = idx.byId.get(I.mfNormalize('codearts/kimi-k3.1-pro'))
+  const pangu = idx.byId.get(I.mfNormalize('codearts/openpangu-2.0-pro'))
+  // all three id forms of the讯飞 model, plus qfmodel, must stay available
+  assert.equal(sparkSlash.availability, 'available')
+  assert.equal(sparkBare.availability, 'available')
+  assert.equal(sparkColon.availability, 'available')
+  assert.equal(qf.availability, 'available')
+  assert.equal(I.mfShouldShow(sparkSlash, { available: true }), true)
+  assert.equal(I.mfShouldShow(qf, { available: true }), true)
+  // failed-history channel models stay demoted
+  assert.equal(kimi.availability, 'unverified')
+  assert.equal(pangu.availability, 'unverified')
+  assert.equal(I.mfShouldShow(kimi, { available: true }), false)
+})
+
 check('teardown disconnects every observer and document listener', () => {
   cleanup()
   for (const o of MO.all) assert.equal(o.observing.length, 0)

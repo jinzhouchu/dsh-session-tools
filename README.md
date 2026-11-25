@@ -56,7 +56,7 @@ Host 侧同时注册了工具 `open_folder` / `delete` / `storage_info` / `stora
 细节：
 
 - 筛选后**零命中的来源连标题一起立即隐藏**，不需要先展开一次。
-- **"可用"的可信度**：`dsh-our-free-model` 的 summary 把 EAC / Kilo / aggregate / combo 这四类渠道模型无条件标成 `available`（`probedAt === 0`，从未探测），所以标"可用"不等于真能对话。本插件据此把它们降级为 `unverified`，"仅可用"默认隐藏；实测确认能吐字的模型列在 `client.js` 的 `MF_VERIFIED_LIVE` 白名单里（免费额度会滚动，需定期重跑探测更新该集合）。
+- **"可用"的可信度**：`dsh-our-free-model` 的 summary 把未探测的模型（`probedAt === 0`，含 EAC / Kilo / aggregate / combo 及所有渠道模型）无条件标成 `available`，所以标"可用"不等于真能对话。本插件据此把它们降级为 `unverified`，"仅可用"默认隐藏；有真实证据能吐字的模型列在 `client.js` 的 `MF_VERIFIED_LIVE` 白名单里，匹配支持完整 id 与尾缀（如 `spark-x2.6` 可命中 `loomy/spark-x2.6`）。白名单来源有二：① 18899 网关真实对话实测通过的免费池模型；② `channel-pack/token-ledger.json` 里有成功请求历史的渠道模型（讯飞 `spark-x2.6`、qodercn `qfmodel` 等）。只有失败记录的（Kimi-K3、OpenPangu）刻意排除。免费额度与渠道会滚动，需定期对照 ledger 更新该集合。
 - 来源标题黑色加粗；额度写在 `data-st-mf-quota` 属性上，用 CSS `::after` 渲染，不污染作为折叠 key 的标题文字。
 - 三种开关状态跨重启保留。
 
