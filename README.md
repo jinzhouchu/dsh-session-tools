@@ -56,7 +56,7 @@ Host 侧同时注册了工具 `open_folder` / `delete` / `storage_info` / `stora
 细节：
 
 - 筛选后**零命中的来源连标题一起立即隐藏**，不需要先展开一次。
-- **"可用"的可信度**：`dsh-our-free-model` 的 summary 把未探测的模型（`probedAt === 0`，含 EAC / Kilo / aggregate / combo）无条件标成 `available`，所以标"可用"不等于真能对话。本插件据此把它们降级为 `unverified`，"仅可用"默认隐藏；有真实证据能吐字的模型列在 `client.js` 的 `MF_VERIFIED_ROWS` 里，匹配支持完整 id 与尾缀（如 `spark-x2.6` 可命中 `loomy:spark-x2.6`）。
+- **"可用"的可信度**：`dsh-our-free-model` 的 summary 把未探测的模型（`probedAt === 0`，含 EAC / Kilo / aggregate / combo）无条件标成 `available`，所以标"可用"不等于真能对话。本插件据此把它们降级为 `unverified`，"仅可用"默认隐藏；有真实证据能吐字的模型列在 `client.js` 的 `MF_VERIFIED_ROWS` 里，匹配支持完整 id 与尾缀（如 `spark-x2.6` 可命中 `loomy:spark-x2.6`）。渠道模型的证据来自 `token-ledger.json`，会随实际路由变化更新：11-25 起 Loomy 的实际流量从 `spark-x2.6` 迁到 `auto`（54req/34err），所以 `auto` 也以 `providers: ['loomy', 'qodercn']` 入表。
   - ⚠️ `/summary` 只发布免费池 + Kilo 约 48 行，**Loomy（讯飞）/Qoder/Raccoon/LobsterAI 等渠道模型根本不在目录里**。早期只写白名单没有可匹配的行，导致"仅可用"把整个讯飞组隐藏。现在证据行会携带下拉实际渲染的别名（如 `Spark X2.6 · x0.1`）被种子化进索引；种子行只参与查找，不计入"元数据 N 条"统计。
   - 白名单有**严格的证据门槛**，只收两类：① 18899 网关真实对话实测通过的免费池模型；② `channel-pack/token-ledger.json` 里**有充分成功记录**（数十次请求）的渠道模型（讯飞 `spark-x2.6` 281req、qodercn `qfmodel` 888req 等）。仅 1 次成功、或只有失败记录的（Kimi-K3、OpenPangu、Qoder `mmodel`/MiniMax-M3 7req/7err）一律不收。
   - ⚠️ **证据按产品隔离**：同一个 id 在不同渠道表现可以完全相反。`qfmodel`（显示名 `Qwen3.8-Flash · 免费`）在 Qoder 中国版有 888req/32err 的成功历史，但 Qoder 国际版 2026-11-25 是 5req/5err（112/model_error + pricingUrl 门槛）。证据行带 `providers`，`mfLookup` 会用来源分组校验；Qoder 国际版不会继承 Qoder 中国版的"可用"判定。

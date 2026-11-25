@@ -1075,6 +1075,29 @@ check('qfmodel evidence is provider-scoped: Qoder intl cannot borrow Qoder CN su
   assert.equal(I.mfLookup(idx, labelOnly, 'qoder'), null)
 })
 
+check('loomy auto is kept while unrelated auto models are not borrowed', () => {
+  // 2026-11-25: 讯飞 traffic moved from `spark-x2.6` (last 11-15) to `auto`
+  // (54 req / 34 err). Qoder CN also has 21/0 on auto. Both share the bare
+  // id, so evidence must be keyed by the source group.
+  const idx = I.mfBuildIndex([])
+  const option = new El('button')
+  option.setAttribute('title', 'Auto')
+  const span = new El('span')
+  span.setAttribute('data-model-id', 'auto')
+  option.appendChild(span)
+
+  const loomy = I.mfLookup(idx, option, 'loomy')
+  assert.ok(loomy, 'Loomy auto must resolve')
+  assert.equal(loomy.id, 'auto')
+  assert.equal(loomy.providers.join('|'), 'loomy|qodercn')
+  assert.equal(loomy.availability, 'available')
+  assert.equal(I.mfShouldShow(loomy, { available: true }), true)
+
+  assert.equal(I.mfLookup(idx, option, 'qodercn')?.id, 'auto')
+  assert.equal(I.mfLookup(idx, option, 'qoder'), null)
+  assert.equal(I.mfLookup(idx, option, 'cline'), null)
+})
+
 check('teardown disconnects every observer and document listener', () => {
   cleanup()
   for (const o of MO.all) assert.equal(o.observing.length, 0)

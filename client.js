@@ -762,10 +762,21 @@ window.__ModuleLoader__.load({
       // channel-pack/token-ledger.json (2026-11-12/13/15) are admitted. One
       // lucky request is not enough: quotas and routes rotate daily.
       {
-        id: 'spark-x2.6',           // loomy 讯飞, 281 req / 30 err
+        id: 'spark-x2.6',           // loomy 讯飞, 281 req / 30 err; last used 11-15
         name: 'Spark X2.6',
         aliases: ['Spark X2.6', 'Spark X2.6 · x0.1', 'Spark X2.6 (x0.1)', '讯飞 Spark X2.6', 'Loomy (讯飞) Spark X2.6'],
         providers: ['loomy'],
+      },
+      {
+        // 2026-11-25: Loomy's live traffic moved to `auto` (54 req / 34 err,
+        // i.e. 20 successful chats). The old `spark-x2.6` id has no traffic
+        // since 11-15, so without this row the whole 讯飞 group disappears.
+        // Qoder CN also has a successful `auto` history (21 req / 0 err on
+        // 11-17); both are provider-scoped so Qoder intl's `auto` stays out.
+        id: 'auto',
+        name: 'Auto',
+        aliases: ['Auto', '自动', 'Loomy Auto', 'Qoder 中国版 Auto'],
+        providers: ['loomy', 'qodercn'],
       },
       {
         // ⚠️ qfmodel is shared by TWO products. Only qodercn's account has a
